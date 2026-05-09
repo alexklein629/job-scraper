@@ -1,0 +1,32 @@
+name: Test Email
+
+on:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send test email
+        env:
+          GMAIL_USER: ${{ secrets.GMAIL_USER }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+        run: |
+          python3 - <<'EOF'
+          import smtplib
+          from email.mime.text import MIMEText
+          import os
+
+          user = os.environ['GMAIL_USER']
+          password = os.environ['GMAIL_APP_PASSWORD']
+
+          msg = MIMEText("If you're reading this, the job scraper email is working!")
+          msg['Subject'] = 'Job Scraper Test'
+          msg['From'] = user
+          msg['To'] = user
+
+          with smtplib.SMTP_SSL('smtp.gmail.com', 465) as smtp:
+              smtp.login(user, password)
+              smtp.send_message(msg)
+              print("Email sent successfully!")
+          EOF
