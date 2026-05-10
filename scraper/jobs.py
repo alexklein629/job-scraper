@@ -65,9 +65,16 @@ def is_remote(job):
 def within_timeframe(job):
     date_posted = job.get('date_posted')
     if date_posted is None:
-        return True  # include if date unknown
-    cutoff = datetime.now().date() - timedelta(hours=HOURS_LOOKBACK)
-    return date_posted >= cutoff
+        return True
+    try:
+        if isinstance(date_posted, float) or isinstance(date_posted, int):
+            return True  # can't determine date, include it
+        if hasattr(date_posted, 'date'):
+            date_posted = date_posted.date()
+        cutoff = (datetime.now() - timedelta(hours=HOURS_LOOKBACK)).date()
+        return date_posted >= cutoff
+    except Exception:
+        return True  # if anything goes wrong, include the job
 
 # ── Scrape ────────────────────────────────────────────────────────────────────
 
