@@ -26,6 +26,4 @@ jobs:
         run: python scraper/jobs.py
 
       - name: Install dependencies
-        run: |
-          pip install -r requirements.txt
-          pip show jobspy
+        run: pip install -r requirements.txt
