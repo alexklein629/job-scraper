@@ -1,7 +1,9 @@
 import os
 import csv
+import time
 import smtplib
 import hashlib
+import requests
 from datetime import datetime, timedelta
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
@@ -77,11 +79,63 @@ def within_timeframe(job):
         return True  # if anything goes wrong, include the job
 
 # ── Scrape ────────────────────────────────────────────────────────────────────
+def scrape_hiring_cafe(search_query, hours_old=48):
+    """Scrape jobs from hiring.cafe public API."""
+    
+    base_url = "https://hiring.cafe"
+    jobs_endpoint = f"{base_url}/api/search-jobs"
+    
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept": "application/json, text/plain, */*",
+        "Accept-Language": "en-US,en;q=0.9",
+        "Content-Type": "application/json",
+        "Origin": "https://hiring.cafe",
+        "Referer": "https://hiring.cafe/",
+    }
+    
+    payload = {
+        "searchQuery": search_query,
+        "searchState": {
+            "workplaceTypes": ["REMOTE"],
+            "commitmentTypes": ["FULL_TIME", "CONTRACT"],
+            "locations": [{"country": "US"}],
+        },
+        "pagination": {"pageSize": 100, "page": 0}
+    }
+    
+    jobs = []
+    cutoff = datetime.now() - timedelta(hours=hours_old)
+    
+    try:
+        response = requests.post(jobs_endpoint, json=payload, headers=headers, timeout=15)
+        response.raise_for_status()
+        data = response.json()
+        
+        raw_jobs = data.get("jobPostings") or data.get("jobs") or data.get("results") or []
+        print(f"     {len(raw_jobs)} results")
+        
+        for job in raw_jobs:
+            # Normalize to same format as jobspy jobs
+            jobs.append({
+                "title":       job.get("title", ""),
+                "company":     job.get("source", job.get("company", "")),
+                "location":    "Remote",
+                "job_url":     job.get("apply_url", job.get("applyUrl", "")),
+                "description": job.get("description_clean", job.get("descriptionClean", job.get("description", ""))),
+                "date_posted": None,  # hiring cafe doesn't always surface this
+                "is_remote":   True,
+                "min_amount":  None,
+            })
+    except Exception as e:
+        print(f"     Hiring Cafe failed: {e}")
+    
+    return jobs
 
 def fetch_jobs():
     print("Scraping jobs...")
     all_jobs = []
-    sources  = ['indeed', 'linkedin', 'glassdoor', 'zip_recruiter']
+    sources  = ['indeed', 'linkedin',]
 
     for source in sources:
         try:
@@ -99,6 +153,13 @@ def fetch_jobs():
             print(f"     {len(df)} results")
         except Exception as e:
             print(f"     Failed: {e}")
+
+    # Hiring Cafe
+    print("  → hiring_cafe")
+    for term in ["data analyst", "business intelligence", "power bi", "data engineer"]:
+        hc_jobs = scrape_hiring_cafe(term, hours_old=HOURS_LOOKBACK)
+        all_jobs.extend(hc_jobs)
+        time.sleep(2)  # be polite
 
     return all_jobs
 
